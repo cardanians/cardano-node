@@ -110,7 +110,8 @@ data ForgingStats
 -- | Per-forging-thread statistics.
 data ForgeThreadStats = ForgeThreadStats
   { ftsFirstSlot                 :: !SlotNo
-    -- ^ First slot when a forging thread was active.
+    -- ^ First slot when the corresponding forging thread was active,
+    --   which serves as point of origin for its statistics.
   , ftsLeadershipChecksInitiated :: !Int
   , ftsNodeCannotForgeNum        :: !Int
   , ftsNodeIsLeaderNum           :: !Int
@@ -118,9 +119,13 @@ data ForgeThreadStats = ForgeThreadStats
   , ftsBlocksForgedNum           :: !Int
   , ftsBlocksForgedInvalidNum    :: !Int
   , ftsSlotsMissedNum            :: !Int
-    -- ^ Potentially missed slots -- note that this can be much larger than the
-    -- actual number of slots, since this includes all occurences of not reaching
-    -- a leadership test decision.
+    -- ^ Potentially missed slots.  Note that this is not the same as the number
+    -- of missed blocks, since this includes all occurences of not reaching a
+    -- leadership check decision, whether or not leadership was possible or not.
+    --
+    -- Also note that when the aggregate total for this metric is reported in the
+    -- multi-pool case, it can be much larger than the actual number of slots
+    -- occuring since node start, for it is a sum total for all threads.
   }
 
 mkForgingStats :: IO ForgingStats
