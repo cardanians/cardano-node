@@ -287,6 +287,7 @@ test-suite cardano-node-test
                       , directory
                       , hedgehog
                       , hedgehog-corpus
+                      , hedgehog-extras
                       , iproute
                       , mmorph
                       , network
@@ -300,9 +301,11 @@ test-suite cardano-node-test
                       , shelley-spec-ledger-test
                       , temporary
                       , time
+                      , unix
                       , unliftio
 
   other-modules:        Test.Cardano.Node.Gen
+                        Test.Cardano.Node.FilePermissions
                         Test.Cardano.Node.Json
                         Test.Cardano.Node.POM
 

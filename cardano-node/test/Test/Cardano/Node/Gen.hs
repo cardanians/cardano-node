@@ -9,6 +9,8 @@ module Test.Cardano.Node.Gen
   , genNodeAddress
   , genNodeHostAddress
   , genNodeSetup
+  , genGroupPermissions
+  , genOtherPermissions
   ) where
 
 import           Cardano.Prelude
@@ -18,6 +20,8 @@ import           Cardano.Node.Configuration.Topology (NetworkTopology (..), Node
 import           Cardano.Node.Types (NodeAddress (..), NodeHostAddress (..))
 
 import qualified Data.IP as IP
+import           System.Posix.Files
+import           System.Posix.Types
 
 import           Hedgehog (Gen)
 import           Hedgehog.Corpus (cooking)
@@ -63,3 +67,16 @@ genRemoteAddress =
     <$> Gen.element cooking
     <*> fmap fromIntegral (Gen.word16 $ Range.linear 100 20000)
     <*> Gen.int (Range.linear 0 100)
+
+genGroupPermissions :: Gen [FileMode]
+genGroupPermissions =
+  let gPermissions = [groupReadMode, groupWriteMode, groupExecuteMode]
+  in do subSeq <- Gen.filter (not . null) $ Gen.subsequence gPermissions
+        Gen.frequency [(3, return gPermissions), (12, return subSeq)]
+
+genOtherPermissions :: Gen [FileMode]
+genOtherPermissions =
+  let oPermissions = [otherReadMode, otherWriteMode, otherExecuteMode]
+  in do subSeq <- Gen.filter (not . null) $ Gen.subsequence oPermissions
+        Gen.frequency [(3, return oPermissions), (12, return subSeq)]
+

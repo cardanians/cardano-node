@@ -12,12 +12,14 @@
 
 module Cardano.Node.Run
   ( runNode
+  , checkVRFFilePermissions
   ) where
 
 import           Cardano.Prelude hiding (ByteString, atomically, take, trace)
 import           Prelude (String)
 
 import qualified Control.Concurrent.Async as Async
+import           Control.Monad.Trans.Except.Extra (left, right)
 import           Control.Tracer
 import qualified Data.ByteString.Char8 as BSC
 import           Data.Either (partitionEithers)
@@ -32,6 +34,8 @@ import           Network.HostName (getHostName)
 import           Network.Socket (AddrInfo, Socket)
 import           System.Directory (canonicalizePath, createDirectoryIfMissing, makeAbsolute)
 import           System.Environment (lookupEnv)
+import           System.Posix.Files
+import           System.Posix.Types (FileMode)
 
 import           Cardano.BM.Data.Aggregated (Measurable (..))
 import           Paths_cardano_node (version)
@@ -101,6 +105,13 @@ runNode cmdPc = do
     nc <- case makeNodeConfiguration $ defaultPartialNodeConfiguration <> configYamlPc <> cmdPc of
             Left err -> panic $ "Error in creating the NodeConfiguration: " <> Text.pack err
             Right nc' -> return nc'
+
+#ifdef UNIX
+    vrf <- runExceptT . checkVRFFilePermissions . shelleyVRFFile $ ncProtocolFiles nc
+    case vrf of
+      Left err -> putTextLn (renderVRFFilePermissionsErr err) >> exitFailure
+      Right () -> pure ()
+#endif
 
     eLoggingLayer <- runExceptT $ createLoggingLayer
                      (Text.pack (showVersion version))
@@ -400,6 +411,48 @@ canonDbPath NodeConfiguration{ncDatabaseFile = DbFile dbFp} = do
   fp <- canonicalizePath =<< makeAbsolute dbFp
   createDirectoryIfMissing True fp
   return fp
+
+#ifdef UNIX
+-- | Make sure the VRF private key file is readable only
+-- by the current process owner the node is running under.
+checkVRFFilePermissions :: Maybe FilePath -> ExceptT VRFPrivateKeyFilePermissionError IO ()
+checkVRFFilePermissions mFp =
+  case mFp of
+    Just vrfPrivKey -> do
+      fs <- liftIO $ getFileStatus vrfPrivKey
+      let fm = fileMode fs
+
+      -- Check the the VRF private key file does not give read/write/exec permissions to others.
+      when (hasOtherPermissions fm)
+           (left $ OtherPermissionsExist vrfPrivKey)
+      -- Check the the VRF private key file does not give read/write/exec permissions to any group.
+      when (hasGroupPermissions fm)
+           (left $ GroupPermissionsExist vrfPrivKey)
+      -- Check that the VRF private key file has owner read permissions.
+      unless (hasOwnerPermissions fm)
+             (left $ OwnerDoesNotHaveReadWrite vrfPrivKey)
+
+    Nothing -> right ()
+ where
+
+  hasPermission :: FileMode -> FileMode -> Bool
+  hasPermission fModeA fModeB = fModeA `intersectFileModes` fModeB == fModeB
+
+  hasOwnerPermissions :: FileMode -> Bool
+  hasOwnerPermissions fm'
+    | fm' `hasPermission` ownerReadMode = True
+    | otherwise = False
+
+  hasOtherPermissions :: FileMode -> Bool
+  hasOtherPermissions fm'
+    | any (fm' `hasPermission`) [otherReadMode, otherWriteMode, otherExecuteMode] = True
+    | otherwise = False
+
+  hasGroupPermissions :: FileMode -> Bool
+  hasGroupPermissions fm'
+    | any (fm' `hasPermission`) [groupReadMode, groupWriteMode, groupExecuteMode] = True
+    | otherwise = False
+#endif
 
 createDiffusionArguments
   :: SocketOrSocketInfo [Socket] [AddrInfo]

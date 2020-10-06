@@ -22,7 +22,9 @@ module Cardano.Node.Types
   , SocketPath(..)
   , TopologyFile(..)
   , ViewMode(..)
+  , VRFPrivateKeyFilePermissionError(..)
   , protocolName
+  , renderVRFFilePermissionsErr
   ) where
 
 import           Cardano.Prelude
@@ -305,3 +307,22 @@ protocolName :: Protocol -> String
 protocolName ByronProtocol   = "Byron"
 protocolName ShelleyProtocol = "Shelley"
 protocolName CardanoProtocol = "Byron; Shelley"
+
+
+data VRFPrivateKeyFilePermissionError
+  = OtherPermissionsExist FilePath
+  | GroupPermissionsExist FilePath
+  | OwnerDoesNotHaveReadWrite FilePath
+  deriving Show
+
+renderVRFFilePermissionsErr :: VRFPrivateKeyFilePermissionError -> Text
+renderVRFFilePermissionsErr err =
+  case err of
+    OtherPermissionsExist fp ->
+      "VRF private key file at: " <> Text.pack fp <> " has \"other\" file permissions. Please remove all \"other\" file permissions."
+
+    GroupPermissionsExist fp ->
+      "VRF private key file at: " <> Text.pack fp <> "has \"group\" file permissions. Please remove all \"group\" file permissions."
+
+    OwnerDoesNotHaveReadWrite fp ->
+      "VRF private key file at: " <> Text.pack fp <>  " does not have owner read permission. Please enable owner read permission"
